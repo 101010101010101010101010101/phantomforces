@@ -1,0 +1,185 @@
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+local ViewportCenter = Camera.ViewportSize/2
+
+function client:GetCorners(Size, CF)
+    local Corners = {}
+    Corners["TopLeft"] = (CF * CFrame.new(Size.X, Size.Y, 0)).p
+    Corners["TopRight"] = (CF * CFrame.new(-Size.X, Size.Y, 0)).p
+    Corners["BottomLeft"] = (CF * CFrame.new(Size.X, -Size.Y, 0)).p
+    Corners["BottomRight"] = (CF * CFrame.new(-Size.X, -Size.Y, 0)).p
+    return Corners
+end
+
+function client:GetBoundingBox(Bodyparts)
+	local CFrame, Size = Bodyparts.torso.Parent:GetBoundingBox()
+	local BoxCorners = self:GetCorners(Size / 2, CFrame)
+
+	return {
+		TopLeft = Camera:WorldToViewportPoint(BoxCorners.TopLeft),
+		TopRight = Camera:WorldToViewportPoint(BoxCorners.TopRight),
+		BottomLeft = Camera:WorldToViewportPoint(BoxCorners.BottomLeft),
+		BottomRight = Camera:WorldToViewportPoint(BoxCorners.BottomRight),
+	}
+end
+
+function ESP(player)
+    local CanShow = false
+    local Drawings = {
+        Tracer = DrawingObjectManager:NewDrawing(player, "Line"),
+        Gun = DrawingObjectManager:NewDrawing(player, "Text"),
+        Name = DrawingObjectManager:NewDrawing(player, "Text"),
+        Health = DrawingObjectManager:NewDrawing(player, "Line"),
+        Health2 = DrawingObjectManager:NewDrawing(player, "Line"),
+        Box = {
+            TopLeft = DrawingObjectManager:NewDrawing(player, "Line"),
+            BottomLeft = DrawingObjectManager:NewDrawing(player, "Line"),
+            TopRight = DrawingObjectManager:NewDrawing(player, "Line"),
+            BottomRight = DrawingObjectManager:NewDrawing(player, "Line"),
+        },
+    }
+
+    Drawings.Health.Color = Color3.new(0, 255, 0)
+    Drawings.Health2.Color = Color3.new(0, 255, 0)
+
+    RunService:BindToRenderStep(player.Name, 1, function()
+        if client:IsAlive(player) then
+            local function Color(Color)
+                if library.flags.HighlightTarget and library.flags.Closest == player then
+                    return library.flags.HighlightColor
+                end
+                if Color == "Tracer" then
+                    return library.flags.TracerColor
+                elseif Color == "Health" then
+                    return library.flags.HealthColor
+                elseif Color == "Name" then
+                    return library.flags.NameColor
+                elseif Color == "Box" then
+                    return library.flags.BoxColor
+                end
+            end
+
+
+            local BodyParts = client.replication.bodyparts[player]
+            if BodyParts then
+
+                local Pos, OnScreen = Camera:WorldToViewportPoint(BodyParts.head.Position)
+				
+				CanShow = ((library.flags.ShowTeammates and player.Team == LocalPlayer.Team) and OnScreen or (player.Team ~= LocalPlayer.Team)) and OnScreen
+
+                
+                Drawings.Tracer.Thickness = library.flags.TracerThickness
+                Drawings.Tracer.Color = Color("Tracer")
+                Drawings.Tracer.Transparency = library.flags.VisualsTransparency
+                Drawings.Tracer.Visible = CanShow and library.flags.TracersOn and library.flags.VisualsOn
+
+                if library.flags.TracerPosition == "Bottom" then
+                    Drawings.Tracer.From = Vector2.new(ViewportCenter.X, ViewportCenter.Y + ViewportCenter.Y)
+                elseif library.flags.TracerPosition == "Top" then
+                    Drawings.Tracer.From = Vector2.new(ViewportCenter.X, ViewportCenter.Y - ViewportCenter.Y)
+                elseif library.flags.TracerPosition == "Left" then
+                    Drawings.Tracer.From = Vector2.new(ViewportCenter.X - ViewportCenter.X, ViewportCenter.Y) -- no idea if github copilot is right
+                elseif library.flags.TracerPosition == "Right" then
+                    Drawings.Tracer.From = Vector2.new(ViewportCenter.X + ViewportCenter.X, ViewportCenter.Y)
+                elseif library.flags.TracerPosition == "Centre" then
+                    Drawings.Tracer.From = Vector2.new(ViewportCenter.X, ViewportCenter.Y)
+                else -- incase it dies idk
+                    Drawings.Tracer.From = Vector2.new(ViewportCenter.X, ViewportCenter.Y)
+                end
+    
+    
+                if BodyParts then
+					local BoxData = client:GetBoundingBox(BodyParts)
+                    
+                    local MidTop = (BoxData.TopLeft + BoxData.TopRight) / 2
+                    local MidBottom = (BoxData.BottomLeft + BoxData.BottomRight) / 2
+                    local MidLeft = (BoxData.TopLeft + BoxData.BottomLeft) / 2
+                    local MidRight = (BoxData.TopRight + BoxData.BottomRight) / 2
+                    local Center = (BoxData.TopLeft + BoxData.BottomRight) / 2
+
+					Drawings.Name.Size = library.flags.nameSize
+					Drawings.Name.Color = Color("Name")
+					Drawings.Name.Transparency = library.flags.VisualsTransparency
+					Drawings.Name.Visible = CanShow and library.flags.nameESP and library.flags.VisualsOn
+					Drawings.Name.Font = library.flags.nameFont
+					Drawings.Name.Text = player.Name
+                    Drawings.Name.Center = true 
+					Drawings.Name.Position = Vector2.new((BoxData.BottomRight.X - BoxData.TopLeft.X) / 2 + BoxData.TopLeft.X, BoxData.TopLeft.Y - 15)
+                    Drawings.Name.Outline = true
+                    Drawings.Name.OutlineColor = Color3.fromRGB(0,0,0)
+
+                    if (library.flags.TracerInnerPosition == "Mid-top") then
+                        Drawings.Tracer.To = Vector2.new(MidTop.X, MidTop.Y)
+                    elseif (library.flags.TracerInnerPosition == "Mid-bottom") then
+                        Drawings.Tracer.To = Vector2.new(MidBottom.X, MidBottom.Y)
+                    elseif (library.flags.TracerInnerPosition == "Mid-left") then
+                        Drawings.Tracer.To = Vector2.new(MidLeft.X, MidLeft.Y)
+                    elseif (library.flags.TracerInnerPosition == "Mid-right") then
+                        Drawings.Tracer.To = Vector2.new(MidRight.X, MidRight.Y)
+                    elseif (library.flags.TracerInnerPosition == "Centre") then
+                        Drawings.Tracer.To = Vector2.new(Center.X, Center.Y)
+                    else
+                        Drawings.Tracer.To = Vector2.new(Center.X, Center.Y)
+                    end
+
+                    local Health = client:getplayerhealth(player)
+                    local DistY = BoxData.BottomLeft.Y - BoxData.TopLeft.Y
+                    local HealthSize = DistY * (Health / 100)
+					
+                    Drawings.Health.Visible = CanShow and library.flags.Health and library.flags.VisualsOn
+                    Drawings.Health2.Visible = CanShow and library.flags.Health and library.flags.VisualsOn
+
+                    Drawings.Health.From = Vector2.new(BoxData.BottomLeft.X - 4, BoxData.BottomLeft.Y)
+                    Drawings.Health.To = Vector2.new(BoxData.TopLeft.X - 4, BoxData.BottomLeft.Y - HealthSize)
+
+                    Drawings.Health2.From = Vector2.new(BoxData.BottomLeft.X - 3, BoxData.BottomLeft.Y)
+                    Drawings.Health2.To = Vector2.new(BoxData.TopLeft.X - 3, BoxData.BottomLeft.Y - HealthSize)
+					
+                    Drawings.Box.TopLeft.Visible = CanShow and library.flags.BoxesOn and library.flags.VisualsOn
+                    Drawings.Box.TopRight.Visible = CanShow and library.flags.BoxesOn and library.flags.VisualsOn
+                    Drawings.Box.BottomLeft.Visible = CanShow and library.flags.BoxesOn and library.flags.VisualsOn
+                    Drawings.Box.BottomRight.Visible = CanShow and library.flags.BoxesOn and library.flags.VisualsOn
+                    local BoxColor = Color("Box")
+                    Drawings.Box.TopLeft.Color = BoxColor
+                    Drawings.Box.TopRight.Color = BoxColor
+                    Drawings.Box.BottomLeft.Color = BoxColor
+                    Drawings.Box.BottomRight.Color = BoxColor
+
+
+                    Drawings.Box.TopLeft.From = Vector2.new(BoxData.TopLeft.X, BoxData.TopLeft.Y)
+                    Drawings.Box.TopLeft.To = Vector2.new(BoxData.TopRight.X, BoxData.TopRight.Y)
+    
+                    Drawings.Box.TopRight.From = Vector2.new(BoxData.TopRight.X, BoxData.TopRight.Y)
+                    Drawings.Box.TopRight.To = Vector2.new(BoxData.BottomRight.X, BoxData.BottomRight.Y)
+    
+                    Drawings.Box.BottomRight.From = Vector2.new(BoxData.BottomRight.X, BoxData.BottomRight.Y)
+                    Drawings.Box.BottomRight.To = Vector2.new(BoxData.BottomLeft.X, BoxData.BottomLeft.Y)
+    
+                    Drawings.Box.BottomLeft.From = Vector2.new(BoxData.BottomLeft.X, BoxData.BottomLeft.Y)
+                    Drawings.Box.BottomLeft.To = Vector2.new(BoxData.TopLeft.X, BoxData.TopLeft.Y)
+                end
+            else
+                Drawings.Tracer.Visible = false
+                Drawings.Name.Visible = false
+                Drawings.Health.Visible = false
+                Drawings.Health2.Visible = false
+                Drawings.Box.TopLeft.Visible = false
+                Drawings.Box.TopRight.Visible = false
+                Drawings.Box.BottomLeft.Visible = false
+                Drawings.Box.BottomRight.Visible = false
+            end
+        else
+            Drawings.Tracer.Visible = false
+            Drawings.Name.Visible = false
+            Drawings.Health.Visible = false
+            Drawings.Health2.Visible = false
+            Drawings.Box.TopLeft.Visible = false
+            Drawings.Box.TopRight.Visible = false
+            Drawings.Box.BottomLeft.Visible = false
+            Drawings.Box.BottomRight.Visible = false
+        end
+    end)
+end
+return ESP
